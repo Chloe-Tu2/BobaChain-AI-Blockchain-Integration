@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # Local Ethereum blockchain using Ganache
+  blockchain:
+    image: trufflesuite/ganache-cli:latest
+    container_name: boba-blockchain
+    ports:
+      - "8545:8545"
+    networks:
+      - boba-network
+    environment:
+      - MNEMONIC=test walk nut penalty hip pave soap entry language right filter choice
+    command: 
+      - --deterministic
+      - --accounts
+      - "10"
+      - --host
+      - "0.0.0.0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Flask Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: boba-backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - FLASK_ENV=development
+      - FLASK_APP=app.py
+      - BLOCKCHAIN_PROVIDER=http://blockchain:8545
+      # Claude Haiku 4.5 Configuration
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - CLAUDE_API_URL=${CLAUDE_API_URL:-https://api.anthropic.com/v1}
+      # Blockchain signing configuration (optional)
+      - BLOCKCHAIN_PRIVATE_KEY=${BLOCKCHAIN_PRIVATE_KEY}
+      - BLOCKCHAIN_FROM_ADDRESS=${BLOCKCHAIN_FROM_ADDRESS}
+    depends_on:
+      blockchain:
+        condition: service_healthy
+    networks:
+      - boba-network
+    command: python app.py
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: boba-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000
+    depends_on:
+      - backend
+    networks:
+      - boba-network
+
+networks:
+  boba-network:
+    driver: bridge
